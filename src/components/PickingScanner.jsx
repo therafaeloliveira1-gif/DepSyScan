@@ -46,6 +46,50 @@ export default function PickingScanner({
     return Math.max(0, Date.now() - startTs);
   });
   const [flashColor, setFlashColor] = useState(null); // 'green' | 'red'
+  const hiddenScannerRef = useRef(null);
+  const [scannerBuffer, setScannerBuffer] = useState('');
+
+  // Mantener receptor enfocado para que Android enrute las teclas del lector físico sin abrir el teclado
+  useEffect(() => {
+    const focusScanner = () => {
+      if (hiddenScannerRef.current && document.activeElement !== hiddenScannerRef.current) {
+        hiddenScannerRef.current.focus({ preventScroll: true });
+      }
+    };
+    focusScanner();
+    const interval = setInterval(focusScanner, 1200);
+    const handleTouch = () => setTimeout(focusScanner, 50);
+    window.addEventListener('touchstart', handleTouch, { passive: true });
+    window.addEventListener('click', handleTouch, { passive: true });
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('touchstart', handleTouch);
+      window.removeEventListener('click', handleTouch);
+    };
+  }, []);
+
+  const handleScannerInput = (e) => {
+    const val = e.target.value;
+    setScannerBuffer(val);
+    if (val && (val.length === 13 || val.length === 14)) {
+      procesarCodigoEscaneado(val);
+      setScannerBuffer('');
+      if (hiddenScannerRef.current) hiddenScannerRef.current.value = '';
+    }
+  };
+
+  const handleScannerKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === 'Tab' || e.keyCode === 13) {
+      e.preventDefault();
+      const code = (e.target.value || scannerBuffer).trim();
+      if (code) {
+        procesarCodigoEscaneado(code);
+      }
+      setScannerBuffer('');
+      if (hiddenScannerRef.current) hiddenScannerRef.current.value = '';
+    }
+  };
 
   // Recarga reactiva de seguridad para asegurar ítems de la nota desde SGLoja / MySQL
   async function recargarItems() {
@@ -658,6 +702,45 @@ export default function PickingScanner({
         style={{ width: `${progressPercent}%` }}
       />
     </div>
+  </div>
+
+  {/* Receptor universal invisible de hardware scanner para Android */}
+  <input
+    ref={hiddenScannerRef}
+    type="text"
+    inputMode="none"
+    autoComplete="off"
+    autoCorrect="off"
+    autoCapitalize="off"
+    spellCheck="false"
+    value={scannerBuffer}
+    onChange={handleScannerInput}
+    onKeyDown={handleScannerKeyDown}
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '1px',
+      height: '1px',
+      opacity: 0,
+      zIndex: -1,
+      border: 'none',
+      outline: 'none',
+      pointerEvents: 'none'
+    }}
+    tabIndex={-1}
+    aria-hidden="true"
+  />
+
+  {/* Pill Indicador de Escáner Conectado */}
+  <div className="flex items-center justify-between px-3 py-1.5 bg-white border border-zinc-200 rounded-xl mb-2 text-[11px] font-mono text-zinc-600 shadow-xs">
+    <div className="flex items-center gap-1.5">
+      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span className="font-semibold text-zinc-800">Lector láser activo</span>
+    </div>
+    <span className="text-[10px] text-zinc-400">
+      {lastScannedSku ? `Último bip: ${lastScannedSku}` : 'Apunta a la caja del repuesto'}
+    </span>
   </div>
 
   {/* Lista de Repuestos: Scroll Fluido con Skeletons y Estados Vacíos Claros */}
