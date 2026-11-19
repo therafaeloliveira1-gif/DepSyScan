@@ -188,25 +188,56 @@ export async function iniciarPicking(notaId, operarioId) {
   }
 }
 
+export async function sincronizarBipsPendientesOffline() {
+  try {
+    const raw = localStorage.getItem('depsys_offline_bips');
+    if (!raw) return;
+    const cola = JSON.parse(raw);
+    if (!Array.isArray(cola) || cola.length === 0) return;
+
+    const pendientes = [...cola];
+    localStorage.removeItem('depsys_offline_bips');
+
+    for (const item of pendientes) {
+      try {
+        await fetch(`${getApiBase()}/picking/bip`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notaId: item.notaId, operarioId: item.operarioId, barcode: item.barcode })
+        });
+      } catch (_) {
+        const restante = JSON.parse(localStorage.getItem('depsys_offline_bips') || '[]');
+        restante.push(item);
+        localStorage.setItem('depsys_offline_bips', JSON.stringify(restante));
+      }
+    }
+  } catch (_) {}
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', sincronizarBipsPendientesOffline);
+}
+
 export async function registrarBip(notaId, operarioId, barcode) {
   try {
-    const res = await fetch(`${getApiBase()}/picking.php?action=bip`, {
+    const res = await fetch(`${getApiBase()}/picking/bip`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ notaId, operarioId, barcode })
     });
-    if (!res.ok) {
-      const fb = await fetch(`${getApiBase()}/picking/bip`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notaId, operarioId, barcode })
-      });
-      return await fb.json();
+    if (res.ok) {
+      sincronizarBipsPendientesOffline();
+      return await res.json();
     }
-    return await res.json();
+    throw new Error('Server not ok');
   } catch (err) {
-    console.error('Error registrando bip:', err);
-    return { success: false, error: err.message };
+    // Modo offline en depósito: encolar en localStorage para enviar al recuperar señal Wi-Fi
+    try {
+      const cola = JSON.parse(localStorage.getItem('depsys_offline_bips') || '[]');
+      cola.push({ notaId, operarioId, barcode, timestamp: Date.now() });
+      localStorage.setItem('depsys_offline_bips', JSON.stringify(cola));
+    } catch (_) {}
+    return { success: true, offline: true };
   }
 }
 
