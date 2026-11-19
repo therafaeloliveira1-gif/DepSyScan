@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Barcode,
   Clock,
   CheckCircle,
   AlertTriangle,
@@ -47,8 +46,6 @@ export default function PickingScanner({
     return Math.max(0, Date.now() - startTs);
   });
   const [flashColor, setFlashColor] = useState(null); // 'green' | 'red'
-  const [manualInput, setManualInput] = useState('');
-  const manualInputRef = useRef(null);
 
   // Recarga reactiva de seguridad para asegurar ítems de la nota desde SGLoja / MySQL
   async function recargarItems() {
@@ -330,13 +327,6 @@ export default function PickingScanner({
   function triggerFlash(color) {
     setFlashColor(color);
     setTimeout(() => setFlashColor(null), 250);
-  }
-
-  function handleManualSubmit(e) {
-    e.preventDefault();
-    if (!manualInput.trim()) return;
-    procesarCodigoEscaneado(manualInput);
-    setManualInput('');
   }
 
   function handleManualIncrement(item) {
@@ -670,29 +660,7 @@ export default function PickingScanner({
     </div>
   </div>
 
-  {/* Barra de Entrada Manual / Indicador de Escáner */ }
-  <form onSubmit={handleManualSubmit} className="relative mb-2.5">
-    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-400">
-      <Barcode className="w-4 h-4 text-[#e60000]" />
-    </div>
-    <input
-      ref={manualInputRef}
-      type="text"
-      value={manualInput}
-      onChange={e => setManualInput(e.target.value)}
-      placeholder="Lector láser activo • O SKU..."
-      className="w-full pl-9 pr-14 py-2.5 bg-white border border-zinc-200 rounded-xl text-zinc-900 font-mono text-sm placeholder-zinc-400 focus:outline-none focus:border-[#e60000] shadow-sm transition-colors"
-    />
-    <button
-      type="submit"
-      disabled={!manualInput.trim()}
-      className="absolute inset-y-1 right-1 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 rounded-lg text-xs font-mono tap-active disabled:opacity-40"
-    >
-      Bip
-    </button>
-  </form>
-
-  {/* Lista de Repuestos: Scroll Fluido con Skeletons y Estados Vacíos Claros */ }
+  {/* Lista de Repuestos: Scroll Fluido con Skeletons y Estados Vacíos Claros */}
   <div className="flex-1 min-h-0 overflow-y-auto space-y-2 sm:space-y-2.5 pr-0.5 mb-2">
     {loadingItems ? (
       <div className="p-6 text-center space-y-3 bg-white border border-zinc-200 rounded-2xl shadow-sm animate-pulse">

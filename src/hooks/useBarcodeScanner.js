@@ -1,18 +1,23 @@
 import { useEffect, useRef } from 'react';
 
 /**
- * Hook para capturar ráfagas ultrarrápidas de lectores láser de código de barras
- * (Pistolas USB, escáneres Bluetooth, y PDAs Android como Zebra, Honeywell o Newland).
+ * Hook para capturar ráfagas de lectores láser y Bluetooth de código de barras
+ * (Pistolas USB, escáneres Bluetooth, y PDAs Android como Zebra, Honeywell, Newland o Datalogic).
  *
- * @param {Function} onScan - Callback invocado con el código de barras limpio.
- * @param {Object} options - Configuración opcional.
+ * Soporta ambas firmas:
+ * 1. useBarcodeScanner(onScan, options)
+ * 2. useBarcodeScanner({ onScan, minLength, ...options })
+ *
+ * @param {Function|Object} onScanOrOptions - Callback o configuración
+ * @param {Object} [options] - Configuración opcional si el primer argumento es función
  */
-export function useBarcodeScanner(onScan, options = {}) {
-  const {
-    minChars = 3,
-    maxIntervalMs = 60, // Límite de tiempo entre teclas para considerarlo ráfaga de lector
-    enabled = true
-  } = options;
+export function useBarcodeScanner(onScanOrOptions, options = {}) {
+  const isObj = typeof onScanOrOptions === 'object' && onScanOrOptions !== null;
+  const onScan = isObj ? onScanOrOptions.onScan : onScanOrOptions;
+  const opts = isObj ? onScanOrOptions : options;
+  const minChars = opts.minChars || opts.minLength || 2;
+  const maxIntervalMs = opts.maxIntervalMs || 75; // Tolerancia óptima para Bluetooth y láser Android
+  const enabled = opts.enabled !== false;
 
   const bufferRef = useRef('');
   const lastKeyTimeRef = useRef(0);
@@ -26,37 +31,38 @@ export function useBarcodeScanner(onScan, options = {}) {
     if (!enabled) return;
 
     function handleKeyDown(e) {
-      // Si el foco está en un input y se presiona Enter, dejamos que el form o input maneje
       const target = e.target;
-      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
 
       const now = Date.now();
       const timeDiff = now - lastKeyTimeRef.current;
       lastKeyTimeRef.current = now;
 
-      if (e.key === 'Enter') {
+      // Enter o Tab señalan el fin de lectura del código de barras
+      if (e.key === 'Enter' || e.key === 'Tab') {
         if (bufferRef.current.length >= minChars) {
           e.preventDefault();
+          e.stopPropagation();
           const scannedCode = bufferRef.current.trim();
           bufferRef.current = '';
-          if (onScanRef.current) {
+          if (typeof onScanRef.current === 'function') {
             onScanRef.current(scannedCode);
           }
         }
         return;
       }
 
-      // Filtrar teclas modificadoras y no imprimibles
+      // Filtrar teclas modificadoras y no imprimibles (Shift, Control, Alt, CapsLock, F1-F12, etc.)
       if (e.key.length > 1) {
         return;
       }
 
-      // Si el intervalo entre pulsaciones es muy largo y no estamos en un input, reiniciar buffer
+      // Si el intervalo entre teclas fue mayor que el umbral de ráfaga y no estamos en un input, limpiar buffer previo
       if (timeDiff > maxIntervalMs && !isInput) {
         bufferRef.current = '';
       }
 
-      // Si no estamos en un input tradicional, capturar para el buffer del escáner
+      // Capturar caracter
       if (!isInput) {
         bufferRef.current += e.key;
       }
